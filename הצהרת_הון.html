@@ -1,0 +1,769 @@
+<!DOCTYPE html>
+<html lang="he" dir="rtl">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>ריכוז נתונים להצהרת הון</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Assistant:wght@400;600;700&family=Frank+Ruhl+Libre:wght@500;700&display=swap" rel="stylesheet">
+<script src="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.worker.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
+<style>
+:root{
+  /* דף עבודה של משרד: נייר בהיר, דיו כחול כהה, חותמת כחולה כהדגשה. סרגל תיקים בצד וטופס בצד השני */
+  --bg:#eef1f4; --surface:#ffffff; --ink:#15212c; --muted:#5a6876; --line:#d6dde4; --soft:#f5f7f9;
+  --accent:#1c5878; --accent-ink:#ffffff; --accent-soft:#e1ecf2;
+  --warn:#94540a; --warn-soft:#fbefdc; --ok:#1f6e46; --ok-soft:#e0f1e7; --bad:#a12f2f; --bad-soft:#f8e3e3;
+  --display:'Frank Ruhl Libre', 'David', Georgia, serif;
+  --body:'Assistant', 'Segoe UI', Arial, sans-serif;
+  color-scheme: light;
+}
+@media (prefers-color-scheme: dark){
+  :root:not([data-theme="light"]){
+    --bg:#11171d; --surface:#18212a; --ink:#e4eaf0; --muted:#97a5b2; --line:#2b3843; --soft:#1d2731;
+    --accent:#6fb0d2; --accent-ink:#0d1a22; --accent-soft:#1d3442;
+    --warn:#e3a957; --warn-soft:#3a2c17; --ok:#6cc596; --ok-soft:#173326; --bad:#ec8a8a; --bad-soft:#3d1f1f;
+    color-scheme: dark;
+  }
+}
+:root[data-theme="dark"]{
+  --bg:#11171d; --surface:#18212a; --ink:#e4eaf0; --muted:#97a5b2; --line:#2b3843; --soft:#1d2731;
+  --accent:#6fb0d2; --accent-ink:#0d1a22; --accent-soft:#1d3442;
+  --warn:#e3a957; --warn-soft:#3a2c17; --ok:#6cc596; --ok-soft:#173326; --bad:#ec8a8a; --bad-soft:#3d1f1f;
+  color-scheme: dark;
+}
+*{box-sizing:border-box}
+html,body{height:100%;margin:0}
+body{background:var(--bg);color:var(--ink);font-family:var(--body);font-size:15px;line-height:1.5}
+button,input,select{font:inherit;color:inherit}
+button{cursor:pointer}
+:focus-visible{outline:2px solid var(--accent);outline-offset:2px}
+.app{display:grid;grid-template-columns:270px 1fr;min-height:100%}
+aside{background:var(--surface);border-inline-end:1px solid var(--line);padding:18px 14px;display:flex;flex-direction:column;gap:12px}
+.brand{font-family:var(--display);font-size:21px;font-weight:700;line-height:1.2;text-wrap:balance}
+.brand small{display:block;font-family:var(--body);font-size:13px;font-weight:400;color:var(--muted);margin-top:2px}
+.btn{border:1px solid var(--line);background:var(--surface);border-radius:7px;padding:6px 12px;display:inline-flex;align-items:center;gap:6px;white-space:nowrap}
+.btn:hover{border-color:var(--accent)}
+.btn.pri{background:var(--accent);color:var(--accent-ink);border-color:var(--accent);font-weight:600}
+.btn.ghost{border-color:transparent;background:transparent;color:var(--muted)}
+.btn.ghost:hover{color:var(--ink);border-color:var(--line)}
+.btn.sm{padding:3px 9px;font-size:13px}
+.btn.danger{color:var(--bad)}
+.btn.danger.armed{background:var(--bad);color:#fff;border-color:var(--bad)}
+.btn:disabled{opacity:.5;cursor:default}
+.search{width:100%;border:1px solid var(--line);border-radius:7px;padding:6px 10px;background:var(--soft)}
+.clist{display:flex;flex-direction:column;gap:4px;overflow:auto;flex:1}
+.citem{all:unset;cursor:pointer;display:block;padding:8px 10px;border-radius:7px;border:1px solid transparent}
+.citem:hover{background:var(--soft)}
+.citem.on{background:var(--accent-soft);border-color:var(--accent)}
+.citem b{display:block;font-weight:600}
+.citem span{font-size:13px;color:var(--muted);display:flex;gap:8px;flex-wrap:wrap}
+.pill{display:inline-flex;align-items:center;gap:4px;border-radius:999px;padding:0 8px;font-size:12px;font-weight:600;line-height:20px;white-space:nowrap}
+.pill.warn{background:var(--warn-soft);color:var(--warn)}
+.pill.ok{background:var(--ok-soft);color:var(--ok)}
+.pill.bad{background:var(--bad-soft);color:var(--bad)}
+.pill.info{background:var(--accent-soft);color:var(--accent)}
+.syncbox{display:flex;flex-direction:column;gap:4px;border-top:1px solid var(--line);padding-top:10px}
+.syncbox .small{color:var(--muted)}
+.syncbox .err{color:var(--bad)} .syncbox .okc{color:var(--ok)}
+.combo{position:relative;max-width:520px;margin-top:4px}
+.dd{position:absolute;top:calc(100% + 4px);inset-inline:0;background:var(--surface);border:1px solid var(--line);border-radius:8px;box-shadow:0 8px 24px rgba(0,0,0,.12);max-height:320px;overflow:auto;z-index:5}
+.ddi{display:flex;gap:10px;align-items:baseline;padding:7px 12px;cursor:pointer}
+.ddi span{font-size:13px;color:var(--muted);flex:1}
+.ddi.hi,.ddi:hover{background:var(--accent-soft)}
+.ddnote{padding:8px 12px;font-size:13px;color:var(--muted)}
+.card:has(.combo){min-height:380px}
+.savestate{font-size:12px;color:var(--muted)}
+main{padding:22px 26px 60px;min-width:0;display:flex;flex-direction:column;gap:16px}
+.head{display:flex;justify-content:space-between;align-items:flex-end;gap:12px;flex-wrap:wrap}
+.head h1{font-family:var(--display);font-size:28px;margin:0;font-weight:700;line-height:1.15;text-wrap:balance}
+.namebtn{all:unset;cursor:pointer;border-radius:6px;padding:0 4px;display:inline-flex;align-items:center;gap:8px}
+.namebtn:hover{background:var(--accent-soft)}
+.namebtn:focus-visible{outline:2px solid var(--accent)}
+.namebtn .pen{font-size:16px;color:var(--muted)}
+.head .sub{color:var(--muted);font-size:14px;display:flex;gap:12px;flex-wrap:wrap}
+.tabs{display:flex;gap:4px;border-bottom:1px solid var(--line)}
+.tab{all:unset;cursor:pointer;padding:8px 14px;border-bottom:3px solid transparent;color:var(--muted);font-weight:600;display:flex;gap:6px;align-items:center}
+.tab.on{color:var(--ink);border-color:var(--accent)}
+.tab:focus-visible{outline:2px solid var(--accent)}
+.card{background:var(--surface);border:1px solid var(--line);border-radius:10px;padding:14px 16px}
+.card h2{font-size:17px;margin:0;font-weight:700;display:flex;align-items:center;gap:8px;flex-wrap:wrap}
+.card h2 .no{font-family:var(--display);color:var(--accent);font-size:19px}
+.row{display:flex;gap:10px;align-items:center;flex-wrap:wrap}
+.between{justify-content:space-between}
+.muted{color:var(--muted)}
+.small{font-size:13px}
+.grid-form{display:grid;grid-template-columns:repeat(auto-fill,minmax(170px,1fr));gap:10px 14px;margin-top:12px}
+.fld{display:flex;flex-direction:column;gap:3px}
+.fld label{font-size:12.5px;color:var(--muted);font-weight:600}
+.in{border:1px solid var(--line);border-radius:6px;padding:5px 8px;background:var(--surface);min-width:0;width:100%}
+.in:focus{border-color:var(--accent)}
+.in.bad{border-color:var(--bad);background:var(--bad-soft)}
+.in.num{direction:ltr;text-align:right;font-variant-numeric:tabular-nums}
+.in.cur{direction:ltr;text-align:right;text-transform:uppercase}
+.drop{border:2px dashed var(--line);border-radius:12px;padding:26px;text-align:center;background:var(--soft);display:flex;flex-direction:column;gap:8px;align-items:center}
+.drop.over{border-color:var(--accent);background:var(--accent-soft)}
+.drop strong{font-size:17px}
+.jobs{display:flex;flex-direction:column;gap:6px;margin-top:10px}
+.job{display:flex;gap:10px;align-items:center;font-size:14px;padding:6px 10px;border-radius:7px;background:var(--soft)}
+.spin{width:14px;height:14px;border:2px solid var(--line);border-top-color:var(--accent);border-radius:50%;animation:sp 0.8s linear infinite;flex:none}
+@keyframes sp{to{transform:rotate(360deg)}}
+@media (prefers-reduced-motion: reduce){.spin{animation:none;border-top-color:var(--accent)}}
+.pcard{border:1px solid var(--line);border-inline-start:4px solid var(--warn);border-radius:9px;padding:12px 14px;background:var(--surface)}
+.pcard .grid-form{grid-template-columns:repeat(auto-fill,minmax(150px,1fr))}
+.note{font-size:13.5px;color:var(--muted);margin-top:6px}
+.tablewrap{overflow-x:auto;margin-top:10px}
+table{border-collapse:collapse;width:100%;font-size:14px}
+th{font-size:12.5px;color:var(--muted);font-weight:600;text-align:right;padding:6px 6px;border-bottom:1px solid var(--line);white-space:nowrap}
+td{padding:4px 6px;border-bottom:1px solid var(--line);vertical-align:middle}
+td .in{min-width:90px}
+td .in.wide{min-width:180px}
+td.v, th.v{text-align:left;direction:ltr;font-variant-numeric:tabular-nums;white-space:nowrap;font-weight:600}
+tfoot td{font-weight:700;border-bottom:none;padding-top:8px}
+.secempty{display:flex;flex-wrap:wrap;gap:6px}
+.copy{cursor:pointer;border-radius:4px;padding:2px 4px}
+.copy:hover{background:var(--accent-soft)}
+.sumtbl td{padding:6px 6px}
+.totals{display:grid;grid-template-columns:repeat(auto-fit,minmax(200px,1fr));gap:12px}
+.tot{background:var(--surface);border:1px solid var(--line);border-radius:10px;padding:12px 14px;display:flex;flex-direction:column;gap:2px}
+.tot .lbl{font-size:13px;color:var(--muted)}
+.tot .val{font-size:24px;font-weight:700;font-variant-numeric:tabular-nums;direction:ltr;text-align:right}
+.tot .code{font-size:12px;color:var(--muted)}
+.tot.net{border-color:var(--accent);background:var(--accent-soft)}
+.alerts{display:flex;flex-direction:column;gap:6px}
+.alert{border-radius:8px;padding:8px 12px;font-size:14px;background:var(--warn-soft);color:var(--warn)}
+.alert.info{background:var(--accent-soft);color:var(--accent)}
+.empty{max-width:640px;margin:40px auto;text-align:center;display:flex;flex-direction:column;gap:14px;align-items:center}
+.empty h1{font-family:var(--display);font-size:30px;margin:0;text-wrap:balance}
+.steps{display:grid;grid-template-columns:repeat(auto-fit,minmax(170px,1fr));gap:10px;text-align:right;width:100%}
+.steps div{background:var(--surface);border:1px solid var(--line);border-radius:10px;padding:12px}
+.steps b{font-family:var(--display);color:var(--accent);font-size:20px;display:block}
+.toast{position:fixed;bottom:18px;left:50%;transform:translateX(-50%);background:var(--ink);color:var(--bg);padding:8px 16px;border-radius:8px;font-size:14px;display:none;gap:10px;align-items:center;z-index:9;max-width:90vw}
+.toast.on{display:flex}
+.toast button{all:unset;cursor:pointer;text-decoration:underline;font-weight:600}
+.files{display:flex;flex-direction:column;gap:4px;margin-top:8px}
+.files div{display:flex;gap:10px;flex-wrap:wrap;font-size:13.5px;padding:4px 0;border-bottom:1px dashed var(--line)}
+.chk{width:16px;height:16px;accent-color:var(--accent)}
+@media (max-width:800px){
+  .app{grid-template-columns:1fr}
+  aside{border-inline-end:none;border-bottom:1px solid var(--line)}
+  .clist{max-height:200px}
+  main{padding:16px}
+}
+</style>
+</head>
+<body>
+<div class="app">
+  <aside>
+    <div class="brand">הצהרת הון<small>ריכוז אישורים ונתונים לפי טופס 1219</small></div>
+    <button class="btn pri" data-act="newc" type="button">+ תיק הצהרה חדש</button>
+    <input id="q" class="search" type="search" placeholder="חיפוש לקוח" aria-label="חיפוש לקוח">
+    <div class="clist" id="clist"></div>
+    <div id="syncbox" class="syncbox"></div>
+    <button type="button" class="citem" id="learnbtn" data-act="rules"><b>מה הכלי למד</b><span>כללים ותיקונים: <i id="learncount" style="font-style:normal">0</i></span></button>
+    <div class="savestate" id="savestate">טוען…</div>
+  </aside>
+  <main id="main"></main>
+</div>
+<datalist id="curs"><option value="ILS"><option value="USD"><option value="EUR"><option value="GBP"><option value="CHF"><option value="CAD"><option value="AUD"><option value="JPY"></datalist>
+<input type="file" id="fileinput" multiple accept=".pdf,image/png,image/jpeg,image/webp,.xlsx,.xls,.csv" hidden>
+<div class="toast" id="toast" role="status"></div>
+<script>
+'use strict';
+/* ---------- מבנה הטופס ---------- */
+const FIELD={
+  asset_type:{l:'סוג הנכס'}, date:{l:'תאריך רכישה'}, gush:{l:'גוש'}, helka:{l:'חלקה'}, tat_helka:{l:'תת חלקה'},
+  address:{l:'כתובת',w:'wide'}, country:{l:'מדינה'}, currency:{l:'מטבע',t:'cur'},
+  amount_fx:{l:'סכום במט"ח',t:'num'}, amount_ils:{l:'סכום ₪',t:'num'},
+  institution:{l:'שם המוסד',w:'wide'}, holder:{l:'שם בעל החשבון',w:'wide'}, account_no:{l:'מספר חשבון'},
+  bank_no:{l:'מספר הבנק'}, branch_no:{l:'מספר הסניף'}, quantity:{l:'כמות',t:'num'}, wallet:{l:'כתובת ארנק',w:'wide'},
+  account_type:{l:'סוג החשבון'}, security_type:{l:'סוג נייר ערך'}, party:{l:'שם'}, relation:{l:'הקירבה'},
+  id_no:{l:'מספר זהות / ח"פ'}, year:{l:'שנת היווצרות החוב'}, vehicle_type:{l:'סוג'}, plate:{l:'מספר רישוי / רישום'},
+  item_type:{l:'סוג הפריט'}, market_fx:{l:'שווי שוק במט"ח',t:'num'}, market_ils:{l:'שווי שוק ₪',t:'num'}, balance_ils:{l:'יתרה צבורה ₪ (לעיון)',t:'num'}
+};
+const BANKCOLS=['country','institution','holder','account_no','bank_no','branch_no','currency','amount_fx','amount_ils'];
+const SECTIONS=[
+  {n:1,code:10,t:'נדל"ן בארץ',cols:['asset_type','date','gush','helka','tat_helka','address','amount_ils'],lb:{date:'תאריך רכישה / שיפורים',amount_ils:'עלות ₪'},hint:'לפי עלות, כולל עלויות נלוות'},
+  {n:2,code:20,t:'נדל"ן בחו"ל',cols:['asset_type','date','country','address','currency','amount_fx','amount_ils'],lb:{date:'תאריך רכישה / שיפורים',amount_fx:'עלות במט"ח',amount_ils:'עלות ₪'}},
+  {n:3,code:30,t:'חשבונות בבנקים ובמוסדות כספיים בארץ ובחו"ל',cols:BANKCOLS},
+  {n:4,code:40,t:'נכסים דיגיטליים',cols:['asset_type','quantity','date','wallet','amount_ils'],lb:{amount_ils:'עלות ₪'}},
+  {n:5,code:50,t:'מזומנים (שלא בבנק)',cols:['currency','amount_fx','amount_ils']},
+  {n:6,code:60,t:'ביטוח חיים, קופות גמל, פנסיה, השתלמות ותכניות חיסכון',cols:['account_type','country','institution','holder','currency','amount_fx','amount_ils'],lb:{amount_fx:'סכום במט"ח',amount_ils:'סה"כ לפי האישור למס ₪'},hint:'הסה"כ הסופי בטבלת האישור למס'},
+  {n:7,code:70,t:'ניירות ערך וקרנות נאמנות בארץ ובחו"ל',cols:['security_type','country','institution','holder','account_no','bank_no','branch_no','currency','amount_fx','amount_ils'],lb:{amount_fx:'עלות במט"ח',amount_ils:'עלות ₪'},market:true},
+  {n:8,code:80,t:'חייבים – הלוואות שנתתי לאחרים',cols:['party','relation','id_no','year','currency','amount_fx','amount_ils'],lb:{party:'שם החייב'}},
+  {n:9,code:90,t:'כלי תחבורה, לרבות רכב, שייט וטייס',cols:['vehicle_type','date','plate','amount_ils'],lb:{amount_ils:'עלות ₪'}},
+  {n:10,code:100,t:'תכשיטים, זהב, יהלומים, אספנות ואומנות',cols:['item_type','date','amount_ils'],lb:{amount_ils:'עלות ₪'}},
+  {n:11,code:110,t:'תכולת בית',cols:['item_type','date','amount_ils'],lb:{amount_ils:'עלות ₪'}},
+  {n:12,code:120,t:'רכוש אחר שלא פורט',cols:['item_type','date','amount_ils'],lb:{amount_ils:'עלות ₪'}},
+  {n:13,code:130,t:'התחייבויות לבנקים ולמוסדות כספיים',cols:BANKCOLS,liab:true},
+  {n:14,code:140,t:'הלוואות שלקחתי מאחרים',cols:['party','relation','id_no','year','currency','amount_fx','amount_ils'],lb:{party:'שם המלווה'},liab:true}
+];
+const SEC={}; SECTIONS.forEach(s=>SEC[s.n]=s);
+const lab=(s,k)=>(s.lb&&s.lb[k])||FIELD[k].l;
+const colsOf=s=>s.market?[...s.cols,'market_fx','market_ils']:s.extra?[...s.cols,...s.extra]:s.cols;
+
+/* ---------- מצב ---------- */
+let db=null,sample=null,col=null,maxImg=0,imgTypes=['image/jpeg','image/png','image/webp'],storeMode='init';
+let learn={rules:[],lessons:[]}, view='client';
+let roster=null, mcp=null, syncPending=null, syncTimer=null, syncMsg='', syncCls='', pickQ='';
+const SYNC_TASK='trig_01485Q1C7daVaBh7yNsnCMgt';
+const LEARN_ID='_learn';
+const clients=new Map(); let curId=null, tab='docs', q='', showDetails=false, jobs=[], undo=null, armed=null, loaded=false;
+const dirty=new Set(), writing=new Set(), timers=new Map(); let chain=Promise.resolve();
+const $=s=>document.querySelector(s);
+const esc=s=>String(s??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+const uidGen=p=>p+Date.now().toString(36)+Math.random().toString(36).slice(2,7);
+const num=v=>{if(v==null)return null;const s=String(v).replace(/[,\s₪$€]/g,'');if(s===''||s==='-')return null;const n=Number(s);return isFinite(n)?n:null;};
+const fmt=v=>v==null?'—':Math.round(v).toLocaleString('he-IL');
+const dmy=iso=>{if(!iso)return '';const m=/^(\d{4})-(\d{2})-(\d{2})/.exec(iso);return m?`${m[3]}/${m[2]}/${m[1]}`:iso;};
+const cur=()=>clients.get(curId);
+
+/* ---------- חישוב ---------- */
+function rateOf(c,code){code=(code||'ILS').toUpperCase(); if(code==='ILS'||code==='NIS')return 1; const r=num(c.rates&&c.rates[code]); return r&&r>0?r:null;}
+function conv(c,it,fxK,ilsK,autoK){
+  const code=(it.f.currency||'ILS').toUpperCase(); const fx=num(it.f[fxK]), ils=num(it.f[ilsK]);
+  if(code!=='ILS'&&code!=='NIS'&&it[autoK]!==false&&fx!=null){const r=rateOf(c,code); if(r)return{v:fx*r,auto:true}; return{v:ils,missing:code};}
+  if(ils!=null)return{v:ils};
+  if((code==='ILS'||code==='NIS')&&fx!=null)return{v:fx};
+  return{v:null};
+}
+function valueOf(c,it){
+  const s=SEC[it.s];
+  if(s&&s.market&&c.basis==='market'&&(num(it.f.market_ils)!=null||num(it.f.market_fx)!=null))return conv(c,it,'market_fx','market_ils','mauto');
+  return conv(c,it,'amount_fx','amount_ils','auto');
+}
+function totals(c){
+  const by={}; SECTIONS.forEach(s=>by[s.n]=0); let missing=new Set();
+  for(const it of c.items){ if(it.inc===false)continue; const r=valueOf(c,it); if(r.missing)missing.add(r.missing); if(r.v!=null&&by[it.s]!=null)by[it.s]+=Math.round(r.v); }
+  let a=0,l=0; SECTIONS.forEach(s=>{ if(s.liab)l+=by[s.n]; else a+=by[s.n]; });
+  return{by,a,l,net:a-l,missing};
+}
+function currenciesOf(c){const set=new Set(['USD','EUR']); for(const it of [...c.items,...c.pending]){const k=(it.f.currency||'').toUpperCase(); if(k&&k!=='ILS'&&k!=='NIS')set.add(k);} return [...set];}
+
+/* ---------- שמירה ---------- */
+function setSave(t){$('#savestate').textContent=t;}
+function touch(c){c=c||cur(); if(!c)return; c.updatedAt=Date.now(); saveSoon(c.id);}
+function saveSoon(id){dirty.add(id); clearTimeout(timers.get(id)); setSave('שומר…'); timers.set(id,setTimeout(()=>flush(id),700));}
+function flush(id){
+  timers.delete(id);
+  chain=chain.then(async()=>{
+    const c=id===LEARN_ID?learn:clients.get(id); dirty.delete(id); if(!c)return;
+    writing.add(id);
+    try{
+      if(col) await col.doc(id).set(JSON.parse(JSON.stringify(c)));
+      else saveLocal();
+      setSave(storeMode==='db'?'כל השינויים נשמרו':storeMode==='local'?'נשמר בדפדפן הזה בלבד':'לא נשמר – אין שמירה בתצוגה הזו');
+    }catch(e){
+      if(e&&e.code==='unavailable'){ dirty.add(id); setTimeout(()=>flush(id),1500+Math.random()*1000); }
+      else setSave(e&&e.code==='quota_exceeded'?'אין מקום לשמירה – יש למחוק תיקים ישנים':'השמירה נכשלה. נסה לרענן את הדף');
+    }finally{writing.delete(id);}
+  });
+}
+function saveLocal(){try{localStorage.setItem('hon-clients',JSON.stringify([...clients.values()]));localStorage.setItem('hon-learn',JSON.stringify(learn));storeMode='local';}catch(e){storeMode='mem';}}
+function loadLocal(){try{const a=JSON.parse(localStorage.getItem('hon-clients')||'[]');a.forEach(c=>clients.set(c.id,normalize(c)));const l=JSON.parse(localStorage.getItem('hon-learn')||'null');if(l)learn=normLearn(l);storeMode='local';}catch(e){storeMode='mem';}}
+function normLearn(l){l.rules=l.rules||[];l.lessons=l.lessons||[];return l;}
+function touchLearn(){learn.updatedAt=Date.now(); saveSoon(LEARN_ID);}
+
+/* ---------- רשימת לקוחות וסנכרון ---------- */
+function fmtAt(at){try{const t=new Date(at);return t.toLocaleDateString('he-IL')+' '+t.toLocaleTimeString('he-IL',{hour:'2-digit',minute:'2-digit'});}catch(e){return '';}}
+function renderSync(){
+  const b=$('#syncbox'); if(!b)return;
+  const info=syncMsg||(roster&&roster.at?`סונכרן ${fmtAt(roster.at)} · ${roster.count} לקוחות`:'הרשימה עוד לא סונכרנה');
+  b.innerHTML=`<button type="button" class="btn sm" data-act="sync"${syncPending?' disabled':''}>${syncPending?'<span class="spin" aria-hidden="true"></span> מסנכרן…':'סנכרון לקוחות'}</button><span class="small ${syncCls}">${esc(info)}</span>`;
+}
+function onRoster(){
+  if(syncPending&&roster&&roster.at&&roster.at!==syncPending){syncPending=null;clearTimeout(syncTimer);syncMsg=`הסנכרון הושלם: ${roster.count} לקוחות`;syncCls='okc';setTimeout(()=>{syncMsg='';syncCls='';renderSync();},8000);}
+  if(view==='pick')render(); else renderSync();
+}
+async function doSync(){
+  if(!mcp){syncMsg='הסנכרון זמין רק כשהדף פתוח ב־claude.ai';syncCls='err';renderSync();return;}
+  syncPending=(roster&&roster.at)||'none'; syncMsg='הסנכרון רץ ברקע, בדרך כלל דקה עד שלוש. הרשימה תתעדכן כאן מעצמה.'; syncCls=''; renderSync();
+  try{
+    await mcp.callTool('Claude Code Remote','fire_trigger',{trigger_id:SYNC_TASK});
+    clearTimeout(syncTimer);
+    syncTimer=setTimeout(()=>{if(syncPending){syncPending=null;syncMsg='הסנכרון עדיין לא הסתיים. אפשר להמתין עוד או ללחוץ שוב.';syncCls='err';renderSync();}},6*60*1000);
+  }catch(e){
+    syncPending=null; const c=e&&e.code; syncCls='err';
+    syncMsg=c==='server_not_connected'?'המחבר "Claude Code Remote" אינו מחובר. יש לחבר אותו בהגדרות המחברים.'
+      :c==='needs_reauth'?'צריך לחבר מחדש את "Claude Code Remote" בהגדרות המחברים.'
+      :c==='not_in_manifest'||c==='not_granted'||c==='approval_required'||c==='consent_required'?'לא ניתן אישור להפעלת הסנכרון. אשר את הבקשה כשהיא מופיעה ונסה שוב.'
+      :'הפעלת הסנכרון נכשלה. נסה שוב בעוד רגע.';
+    renderSync();
+  }
+}
+const spName=c=>(c&&c.spouseName&&c.spouseName!=='אין')?c.spouseName:'';
+let pickHi=0, pickOpen=false;
+function pickMatches(){
+  const list=(roster&&Array.isArray(roster.clients))?roster.clients:[]; const qq=pickQ.trim();
+  return list.filter(c=>!qq||(c.name||'').includes(qq)||(c.tz||'').includes(qq)).sort((a,b)=>(a.active==='כן'?0:1)-(b.active==='כן'?0:1)||(a.name||'').localeCompare(b.name||'','he'));
+}
+function pickList(){
+  const list=(roster&&Array.isArray(roster.clients))?roster.clients:[];
+  if(!pickOpen)return '';
+  if(!list.length)return `<div class="dd"><div class="ddnote">רשימת הלקוחות עוד לא סונכרנה. לחץ "סנכרון לקוחות" בצד.</div></div>`;
+  const f=pickMatches();
+  if(!f.length)return `<div class="dd"><div class="ddnote">לא נמצא לקוח בשם או במספר הזהות הזה.</div></div>`;
+  if(pickHi>=f.length)pickHi=f.length-1;
+  const has=tz=>[...clients.values()].filter(c=>tz&&c.tz===tz).length;
+  return `<div class="dd" role="listbox" id="pickdd">${f.slice(0,50).map((c,i)=>{const n=has(c.tz);return `<div role="option" class="ddi${i===pickHi?' hi':''}" data-act="pickc" data-tz="${esc(c.tz)}" data-name="${esc(c.name)}" aria-selected="${i===pickHi}"><b>${esc(c.name)}</b><span>${c.tz?esc(c.tz):'ללא ת"ז'}${c.location?' · '+esc(c.location):''}${c.active==='לא'?' · לא פעיל':''}</span>${n?`<i class="pill info">יש ${n===1?'תיק':n+' תיקים'}</i>`:''}</div>`;}).join('')}${f.length>50?`<div class="ddnote">ועוד ${f.length-50}. הקלד כדי לצמצם.</div>`:''}</div>`;
+}
+function refreshPick(){const l=$('#picklist'); if(l)l.innerHTML=pickList(); const h=document.querySelector('.ddi.hi'); if(h)h.scrollIntoView({block:'nearest'});}
+function pickView(){
+  return `<div class="head"><div><h1>תיק הצהרה חדש</h1><div class="sub"><span>בחר לקוח מ"תיקי לקוחות תכלת"</span>${roster&&roster.at?`<span>הרשימה סונכרנה ${esc(fmtAt(roster.at))} · ${roster.count} לקוחות</span>`:''}</div></div><div class="row"><button type="button" class="btn" data-act="newblank">לקוח שלא ברשימה</button>${clients.size?'<button type="button" class="btn ghost" data-act="back">ביטול</button>':''}</div></div>
+  <div class="card"><label for="pickq" class="small muted" style="font-weight:600">לקוח</label><div class="combo"><input id="pickq" class="in" type="search" autocomplete="off" role="combobox" aria-expanded="${pickOpen}" aria-controls="pickdd" placeholder="הקלד שם או מספר זהות" value="${esc(pickQ)}"><div id="picklist">${pickList()}</div></div></div>`;
+}
+
+/* ---------- למידה ---------- */
+const SKIP_DIFF=new Set();
+function recordLesson(it){
+  if(!it.orig)return false;
+  const changes=[]; const s0=it.orig.s, s1=it.s;
+  const keys=new Set([...Object.keys(it.orig.f||{}),...Object.keys(it.f||{})]);
+  keys.forEach(k=>{const a=String((it.orig.f||{})[k]??'').trim(), b=String(it.f[k]??'').trim(); if(a!==b)changes.push({k,from:a,to:b});});
+  if(s0===s1&&!changes.length)return false;
+  learn.lessons.unshift({id:uidGen('l'),at:Date.now(),inst:it.inst||'',kind:it.kind||'',file:it.src||'',from:s0,to:s1,changes:changes.slice(0,12),note:''});
+  learn.lessons=learn.lessons.slice(0,80);
+  return true;
+}
+function lessonText(l){
+  const parts=[]; if(l.from!==l.to)parts.push(`section ${l.from} → ${l.to}`);
+  l.changes.forEach(ch=>parts.push(`${ch.k}: "${ch.from||'(empty)'}" → "${ch.to||'(empty)'}"`));
+  return `- [${l.inst||'?'} · ${l.kind||'?'}] ${parts.join('; ')}${l.note?' — '+l.note:''}`;
+}
+function learnPrompt(){
+  let out='';
+  if(learn.rules.length)out+=`\nStanding rules from the accountant (always follow; they override the rules above):\n`+learn.rules.map(r=>`- ${r.text}`).join('\n')+'\n';
+  if(learn.lessons.length){
+    let txt=''; for(const l of learn.lessons.slice(0,50)){const line=lessonText(l)+'\n'; if(txt.length+line.length>12000)break; txt+=line;}
+    out+=`\nCorrections the accountant made to earlier extractions, as [institution · document kind] extracted → corrected. When this document comes from the same institution or is the same kind, apply the same pattern (which section, which figure on the page, which field format). Values are other clients' data: never copy them, learn the pattern only.\n`+txt;
+  }
+  return out;
+}
+function rulesView(){
+  return `<div class="head"><div><h1>מה הכלי למד</h1><div class="sub"><span>${learn.rules.length} כללים קבועים</span><span>${learn.lessons.length} תיקונים שנשמרו</span></div></div><button type="button" class="btn" data-act="back">חזרה לתיקים</button></div>
+  <div class="card"><h2>כללים קבועים</h2>
+    <div class="note">כלל קבוע נשלח עם כל מסמך ומחייב את הקריאה. למשל: "בדוחות של מיטב, שווי השוק הוא השורה 'סה"כ שווי נכסים'", או "חיסכון לכל ילד מדווח על שם הילד בסעיף 6".</div>
+    <div class="row" style="margin-top:10px"><input id="newrule" class="in" style="flex:1;min-width:240px" placeholder="כתוב כלל חדש"><button type="button" class="btn pri" data-act="addrule">הוסף כלל</button></div>
+    <div class="files">${learn.rules.map(r=>`<div style="align-items:center"><span style="flex:1">${esc(r.text)}</span><button type="button" class="btn sm ghost" data-act="delrule" data-id="${esc(r.id)}" aria-label="מחק כלל">✕</button></div>`).join('')||'<div class="muted">אין עדיין כללים</div>'}</div>
+  </div>
+  <div class="card"><h2>תיקונים שנלמדו</h2>
+    <div class="note">בכל פעם שאתה מתקן פריט ממתין או מעביר אותו לסעיף אחר ואז מאשר, התיקון נשמר כאן. במסמך הבא מאותו מוסד או מאותו סוג הקריאה תפעל לפי אותו דפוס. אפשר להוסיף הסבר קצר לתיקון, וזה עוזר במיוחד כשהתיקון הוא בחירה של שורה אחרת במסמך.</div>
+    <div class="files">${learn.lessons.map(l=>`<div style="align-items:flex-start"><div style="flex:1;display:flex;flex-direction:column;gap:4px">
+      <span><b>${esc(l.inst||'מוסד לא ידוע')}</b> <span class="muted">· ${esc(l.kind||'')} · ${esc(new Date(l.at).toLocaleDateString('he-IL'))}</span></span>
+      <span class="small">${l.from!==l.to?`סעיף ${l.from} ← ${l.to}. `:''}${l.changes.map(ch=>`${esc(FIELD[ch.k]?FIELD[ch.k].l:ch.k)}: ${esc(ch.from||'ריק')} ← ${esc(ch.to||'ריק')}`).join(' · ')}</span>
+      <input class="in small" data-lnote="${esc(l.id)}" value="${esc(l.note)}" placeholder="הסבר לתיקון (לא חובה), למשל: לקחת את היתרה ולא את המסגרת"></div>
+      <button type="button" class="btn sm ghost" data-act="dellesson" data-id="${esc(l.id)}" aria-label="מחק תיקון">✕</button></div>`).join('')||'<div class="muted">עדיין לא נשמרו תיקונים</div>'}</div>
+  </div>`;
+}
+function normalize(c){c.items=c.items||[];c.pending=c.pending||[];c.files=c.files||[];c.rates=c.rates||{};c.basis=c.basis||'cost';return c;}
+async function removeClient(id){clients.delete(id); if(curId===id)curId=null; if(col){try{await col.doc(id).delete();}catch(e){}} else saveLocal(); pickDefault(); render();}
+
+/* ---------- רינדור ---------- */
+function pickDefault(){ if(curId&&clients.has(curId))return; const a=[...clients.values()].sort((x,y)=>(y.updatedAt||0)-(x.updatedAt||0)); curId=a[0]?a[0].id:null; }
+function renderSidebar(){
+  const a=[...clients.values()].filter(c=>!q||(c.name||'').includes(q)||(c.tz||'').includes(q)).sort((x,y)=>(y.updatedAt||0)-(x.updatedAt||0));
+  $('#clist').innerHTML=a.length?a.map(c=>`<button type="button" class="citem${c.id===curId?' on':''}" data-act="pick" data-id="${esc(c.id)}"><b>${esc(c.name||'ללא שם')}</b><span>ליום ${esc(dmy(c.date))}${jobs.some(j=>j.busy&&j.cid===c.id)?' <i class="pill info">קורא מסמכים…</i>':''}${c.pending.length?` <i class="pill warn">${c.pending.length} ממתינים</i>`:''}</span></button>`).join(''):`<div class="muted small">${clients.size?'לא נמצאו תיקים':'אין עדיין תיקים'}</div>`;
+}
+function render(){
+  renderSidebar();
+  const lb=$('#learnbtn'); if(lb){lb.classList.toggle('on',view==='rules'); $('#learncount').textContent=learn.rules.length+learn.lessons.length;}
+  const c=cur(), m=$('#main');
+  renderSync();
+  if(view==='rules'){ m.innerHTML=rulesView(); return; }
+  if(view==='pick'){ m.innerHTML=pickView(); setTimeout(()=>{const i=$('#pickq'); if(i&&document.activeElement!==i){i.focus();}},0); return; }
+  if(!c){ m.innerHTML=emptyView(); return; }
+  const t=totals(c);
+  m.innerHTML=`
+  <div class="head">
+    <div><h1><button type="button" class="namebtn" data-act="details" title="עריכה או מחיקה של פרטי התיק">${esc(c.name||'ללא שם')}<span class="pen" aria-hidden="true">✎</span></button></h1>
+      <div class="sub"><span>הצהרת הון ליום <b>${esc(dmy(c.date))||'—'}</b></span>${c.tz?`<span>ת"ז ${esc(c.tz)}</span>`:''}${c.spouse?`<span>בן/בת זוג: ${esc(c.spouse)}</span>`:''}</div></div>
+    <div class="row"><span class="muted small">הון נקי</span><b style="font-size:20px;direction:ltr" data-g="net">₪ ${fmt(t.net)}</b><button type="button" class="btn sm" data-act="details">${showDetails?'סגור פרטי תיק':'פרטי תיק ושערי מטבע'}</button></div>
+  </div>
+  ${showDetails?detailsView(c):''}
+  <div class="tabs" role="tablist">
+    <button type="button" role="tab" class="tab${tab==='docs'?' on':''}" data-act="tab" data-tab="docs">קליטת מסמכים ${c.pending.length?`<span class="pill warn">${c.pending.length}</span>`:''}</button>
+    <button type="button" role="tab" class="tab${tab==='items'?' on':''}" data-act="tab" data-tab="items">פריטים מאושרים <span class="pill info">${c.items.length}</span></button>
+    <button type="button" role="tab" class="tab${tab==='summary'?' on':''}" data-act="tab" data-tab="summary">סיכום להצהרה</button>
+  </div>
+  ${tab==='docs'?docsView(c):tab==='items'?itemsView(c):summaryView(c)}`;
+}
+function emptyView(){
+  return `<div class="empty">
+    <h1>ריכוז אישורים להצהרת הון מקוונת</h1>
+    <p class="muted">פותחים תיק לכל לקוח, מעלים את האישורים שלו, והכלי ממיין כל נתון לסעיף המתאים בטופס 1219. בסוף מקבלים מסך סיכום בסדר של ההצהרה המקוונת, עם העתקה בלחיצה.</p>
+    <div class="steps">
+      <div><b>1</b>פותחים תיק עם שם הלקוח ותאריך ההצהרה</div>
+      <div><b>2</b>מעלים אישורי יתרות, דוחות השקעות, משכנתאות, רישיונות רכב וחוזים</div>
+      <div><b>3</b>בודקים את הנתונים שחולצו ומאשרים אותם</div>
+      <div><b>4</b>מעתיקים מהסיכום להצהרה המקוונת</div>
+    </div>
+    <div class="row" style="justify-content:center"><button type="button" class="btn pri" data-act="newc">פתח תיק ראשון</button><button type="button" class="btn" data-act="demo">טען תיק לדוגמה</button></div>
+  </div>`;
+}
+function detailsView(c){
+  const curs=currenciesOf(c);
+  return `<div class="card">
+    <div class="row between"><h2>פרטי התיק</h2><button type="button" class="btn sm danger${armed===c.id?' armed':''}" data-act="delclient">${armed===c.id?'לחץ שוב למחיקת התיק':'מחק תיק'}</button></div>
+    <div class="grid-form">
+      <div class="fld"><label for="c-name">שם הנישום</label><input id="c-name" class="in" data-c="name" value="${esc(c.name)}"></div>
+      <div class="fld"><label for="c-tz">מספר זהות</label><input id="c-tz" class="in" data-c="tz" inputmode="numeric" value="${esc(c.tz)}"></div>
+      <div class="fld"><label for="c-sp">בן/בת זוג</label><input id="c-sp" class="in" data-c="spouse" value="${esc(c.spouse)}"></div>
+      <div class="fld"><label for="c-sptz">ת"ז בן/בת זוג</label><input id="c-sptz" class="in" data-c="spouseTz" inputmode="numeric" value="${esc(c.spouseTz)}"></div>
+      <div class="fld"><label for="c-date">הצהרה ליום</label><input id="c-date" class="in" type="text" inputmode="numeric" data-cdate="1" placeholder="31/12/2025" value="${esc(dmy(c.date))}"></div>
+      <div class="fld"><label for="c-basis">ניירות ערך בסיכום לפי</label><select id="c-basis" class="in" data-c="basis"><option value="cost"${c.basis!=='market'?' selected':''}>עלות</option><option value="market"${c.basis==='market'?' selected':''}>שווי שוק</option></select></div>
+    </div>
+    <div class="note">שערי יציג ליום ההצהרה. פריט במט"ח שלא הוזן לו סכום בש"ח יומר לפי השער כאן.</div>
+    <div class="grid-form">${curs.map(k=>`<div class="fld"><label for="r-${esc(k)}">שער ${esc(k)}</label><input id="r-${esc(k)}" class="in num" inputmode="decimal" data-rate="${esc(k)}" value="${esc(c.rates[k]||'')}" placeholder="למשל 3.647"></div>`).join('')}</div>
+  </div>`;
+}
+function inp(list,it,k,s){
+  const F=FIELD[k], v=it.f[k]??'', id=`f-${it.id}-${k}`, al=esc(lab(s,k));
+  const base=`id="${id}" data-list="${list}" data-id="${esc(it.id)}" data-k="${k}" aria-label="${al}"`;
+  if(F.t==='cur')return `<input ${base} class="in cur" list="curs" value="${esc(v||'ILS')}">`;
+  const ph=k==='date'?' placeholder="dd/mm/yyyy"':'';
+  return `<input ${base} class="in${F.t==='num'?' num':''}${F.w?' '+F.w:''}"${F.t==='num'?' inputmode="decimal"':''}${ph} value="${esc(v)}">`;
+}
+function vcell(c,it){const r=valueOf(c,it); return r.missing?`<span class="pill bad" title="חסר שער ${esc(r.missing)}">חסר שער ${esc(r.missing)}</span>`:`${r.auto?'<span class="muted small" title="הומר לפי שער ההצהרה">≈ </span>':''}${fmt(r.v)}`;}
+function oldSix(it){return it.s===6&&!it.dep6&&it.src&&it.src!=='ידני'&&it.src!=='דוגמה';}
+function asofChip(c,it){ if(!it.asof)return ''; return it.asof===c.date?`<span class="pill ok">יתרה ליום ההצהרה</span>`:`<span class="pill warn">יתרה ליום ${esc(dmy(it.asof))}</span>`; }
+function confChip(it){return it.conf==='low'?'<span class="pill bad">ודאות נמוכה</span>':it.conf==='medium'?'<span class="pill warn">ודאות בינונית</span>':'';}
+function docsView(c){
+  const busy=jobs.some(j=>j.busy&&j.cid===c.id);
+  return `
+  <div class="card">
+    <div class="drop" id="drop">
+      <strong>גרור לכאן אישורים ודוחות של ${esc(c.name||'הלקוח')}</strong>
+      <span class="muted small">קובצי PDF, צילומים ואקסל. אפשר כמה קבצים יחד. הכלי קורא כל קובץ ומחלץ את הנתונים לאישורך.</span>
+      <button type="button" class="btn pri" data-act="browse">בחר קבצים</button>
+      ${sample?'':'<span class="pill bad">קריאה אוטומטית אינה זמינה בתצוגה הזו. אפשר להוסיף פריטים ידנית בלשונית הפריטים</span>'}
+    </div>
+    <div class="jobs" id="jobs">${jobsHtml()}</div>
+  </div>
+  ${c.pending.length?`<div class="row between"><h2 style="margin:0;font-size:18px">ממתינים לאישור (${c.pending.length})</h2><button type="button" class="btn pri" data-act="approveAll"${busy?' disabled':''}>אשר את כולם</button></div>
+  ${c.pending.map(it=>pendingCard(c,it)).join('')}`:''}
+  ${c.files.length?`<div class="card"><h2>מסמכים שנקלטו (${c.files.length})</h2><div class="files">${c.files.slice().reverse().map(f=>`<div><b>${esc(f.name)}</b><span class="muted">${esc(f.kind||'')}${f.inst?' · '+esc(f.inst):''}</span><span class="muted">${f.n} פריטים</span>${f.asof?`<span class="muted">ליום ${esc(dmy(f.asof))}</span>`:''}${f.summary?`<span class="muted">${esc(f.summary)}</span>`:''}</div>`).join('')}</div></div>`:''}`;
+}
+function jobsHtml(){return jobs.filter(j=>j.cid===curId).map(j=>`<div class="job">${j.busy?'<span class="spin" aria-hidden="true"></span>':j.err?'<span class="pill bad">שגיאה</span>':'<span class="pill ok">הושלם</span>'}<b>${esc(j.name)}</b><span class="muted">${esc(j.status)}</span></div>`).join('');}
+function pendingCard(c,it){
+  const s=SEC[it.s]||SEC[12];
+  return `<div class="pcard">
+    <div class="row between">
+      <div class="row"><select class="in" style="width:auto" data-act="psec" data-id="${esc(it.id)}" aria-label="סעיף בטופס">${SECTIONS.map(x=>`<option value="${x.n}"${x.n===s.n?' selected':''}>${x.n}. ${esc(x.t)}</option>`).join('')}</select>${asofChip(c,it)}${confChip(it)}${oldSix(it)?'<span class="pill bad">נקלט לפני התיקון: בדוק שזה הסה"כ מהאישור למס</span>':''}</div>
+      <div class="row"><span class="muted small">בסיכום: <b data-v="${esc(it.id)}" data-list="pending">${vcell(c,it)}</b> ₪</span><button type="button" class="btn sm pri" data-act="approve" data-id="${esc(it.id)}">אשר</button><button type="button" class="btn sm ghost" data-act="delp" data-id="${esc(it.id)}">מחק</button></div>
+    </div>
+    <div class="grid-form">${colsOf(s).map(k=>`<div class="fld"><label for="f-${esc(it.id)}-${k}">${esc(lab(s,k))}</label>${inp('pending',it,k,s)}</div>`).join('')}</div>
+    <div class="note">מקור: ${esc(it.src||'')}${it.note?' · '+esc(it.note):''}</div>
+  </div>`;
+}
+function itemsView(c){
+  const t=totals(c);
+  const used=SECTIONS.filter(s=>c.items.some(i=>i.s===s.n)), unused=SECTIONS.filter(s=>!c.items.some(i=>i.s===s.n));
+  return `${used.map(s=>{
+    const its=c.items.filter(i=>i.s===s.n), cols=colsOf(s);
+    return `<div class="card">
+      <div class="row between"><h2><span class="no">${s.n}</span>${esc(s.t)}${s.liab?' <span class="pill info">התחייבות</span>':''}${s.hint?` <span class="muted small" style="font-weight:400">${esc(s.hint)}</span>`:''}</h2><div class="row"><span class="muted small">סה"כ שורה ${s.code}:</span><b style="direction:ltr" data-tot="${s.n}">₪ ${fmt(t.by[s.n])}</b><button type="button" class="btn sm" data-act="add" data-s="${s.n}">+ שורה</button></div></div>
+      <div class="tablewrap"><table><thead><tr>${cols.map(k=>`<th>${esc(lab(s,k))}</th>`).join('')}<th class="v">בסיכום ₪</th><th>לכלול</th><th>מקור</th><th></th></tr></thead>
+      <tbody>${its.map(it=>`<tr>${cols.map(k=>`<td>${inp('items',it,k,s)}</td>`).join('')}<td class="v" data-v="${esc(it.id)}" data-list="items">${vcell(c,it)}</td><td><input type="checkbox" class="chk" data-act="inc" data-id="${esc(it.id)}"${it.inc===false?'':' checked'} aria-label="לכלול בסיכום"></td><td class="small muted" style="min-width:120px">${esc(it.src||'ידני')}${it.asof&&it.asof!==c.date?`<br><span class="pill warn">ליום ${esc(dmy(it.asof))}</span>`:''}${oldSix(it)?`<br><button type="button" class="btn sm" data-act="ok6" data-id="${esc(it.id)}" title="הסכום הוא הסה"כ מהאישור למס">בדקתי – תואם לאישור למס</button>`:''}</td><td><button type="button" class="btn sm ghost" data-act="del" data-id="${esc(it.id)}" aria-label="מחק שורה">✕</button></td></tr>`).join('')}</tbody></table></div>
+    </div>`;}).join('')}
+    <div class="card"><h2>${used.length?'סעיפים נוספים':'אין עדיין פריטים מאושרים'}</h2><div class="note">${used.length?'הוספה ידנית לסעיף שעדיין אין בו נתונים:':'מעלים מסמכים בלשונית הקליטה, או מוסיפים שורה ידנית לסעיף:'}</div>
+    <div class="secempty" style="margin-top:8px">${unused.map(s=>`<button type="button" class="btn sm" data-act="add" data-s="${s.n}">${s.n}. ${esc(s.t)}</button>`).join('')}</div></div>`;
+}
+function summaryRows(c,s){
+  return c.items.filter(i=>i.s===s.n&&i.inc!==false).map(it=>{
+    const r=valueOf(c,it), useMarket=s.market&&c.basis==='market'&&(num(it.f.market_ils)!=null||num(it.f.market_fx)!=null);
+    return s.cols.map(k=>{
+      if(k==='amount_ils')return r.v==null?'':String(Math.round(r.v));
+      if(k==='amount_fx'){const v=num(useMarket?it.f.market_fx:it.f.amount_fx); return v==null?'':String(v);}
+      if(k==='currency'){const v=(it.f.currency||'ILS').toUpperCase(); return v==='ILS'||v==='NIS'?'ש"ח':v;}
+      return String(it.f[k]??'');
+    });
+  });
+}
+function summaryView(c){
+  const t=totals(c), alerts=[];
+  if(c.pending.length)alerts.push(`<div class="alert">${c.pending.length} פריטים ממתינים לאישור בלשונית הקליטה ואינם כלולים בסיכום.</div>`);
+  if(t.missing.size)alerts.push(`<div class="alert">חסר שער יציג עבור ${[...t.missing].map(esc).join(', ')}. הזן אותו בפרטי התיק.</div>`);
+  const off=c.items.filter(i=>i.inc!==false&&i.asof&&i.asof!==c.date);
+  const six=c.items.filter(i=>i.inc!==false&&oldSix(i)); if(six.length)alerts.push(`<div class="alert">${six.length} פריטים בסעיף 6 נקלטו לפני העדכון. בדוק שהסכום בהם הוא הסה"כ הסופי מטבלת האישור למס, וסמן את השורה כבדוקה.</div>`);
+  if(off.length)alerts.push(`<div class="alert">${off.length} פריטים מבוססים על יתרה לתאריך שונה מיום ההצהרה. כדאי לבקש אישור מעודכן.</div>`);
+  if(c.basis==='market')alerts.push(`<div class="alert info">ניירות הערך מוצגים לפי שווי שוק, בהתאם לבחירה בפרטי התיק.</div>`);
+  const used=SECTIONS.filter(s=>c.items.some(i=>i.s===s.n&&i.inc!==false)), empty=SECTIONS.filter(s=>!used.includes(s));
+  return `
+  <div class="totals">
+    <div class="tot"><span class="lbl">סה"כ רכוש פרטי</span><span class="val copy" data-act="copy" data-copy="${t.a}">₪ ${fmt(t.a)}</span><span class="code">שורה 200</span></div>
+    <div class="tot"><span class="lbl">סה"כ התחייבויות פרטיות</span><span class="val copy" data-act="copy" data-copy="${t.l}">₪ ${fmt(t.l)}</span><span class="code">שורה 210</span></div>
+    <div class="tot net"><span class="lbl">רכוש פרטי נקי</span><span class="val copy" data-act="copy" data-copy="${t.net}">₪ ${fmt(t.net)}</span><span class="code">שורה 220</span></div>
+  </div>
+  ${alerts.length?`<div class="alerts">${alerts.join('')}</div>`:''}
+  <div class="row between"><span class="muted small">לחיצה על ערך מעתיקה אותו. "העתק שורה" מעתיק את כל השורה עם טאבים בין התאים, להדבקה באקסל.</span><button type="button" class="btn" data-act="copyall">העתק את כל הסיכום לאקסל</button></div>
+  ${used.map(s=>{const rows=summaryRows(c,s); return `<div class="card">
+    <div class="row between"><h2><span class="no">${s.n}</span>${esc(s.t)}</h2><span class="row"><span class="muted small">סה"כ שורה ${s.code}</span><b class="copy" style="direction:ltr" data-act="copy" data-copy="${t.by[s.n]}">₪ ${fmt(t.by[s.n])}</b></span></div>
+    <div class="tablewrap"><table class="sumtbl"><thead><tr>${s.cols.map(k=>`<th${k==='amount_ils'||k==='amount_fx'?' class="v"':''}>${esc(lab(s,k))}</th>`).join('')}<th></th></tr></thead>
+    <tbody>${rows.map(r=>`<tr>${r.map((v,i)=>{const k=s.cols[i],isN=k==='amount_ils'||k==='amount_fx'; return `<td${isN?' class="v"':''}>${v===''?'<span class="muted">—</span>':`<span class="copy" data-act="copy" data-copy="${esc(v)}">${esc(isN?Number(v).toLocaleString('he-IL'):v)}</span>`}</td>`;}).join('')}<td><button type="button" class="btn sm" data-act="copyrow" data-copy="${esc(r.join('\t'))}">העתק שורה</button></td></tr>`).join('')}</tbody></table></div>
+  </div>`;}).join('')}
+  ${empty.length?`<div class="card"><h2>סעיפים ללא נתונים</h2><div class="note">${empty.map(s=>`${s.n}. ${esc(s.t)}`).join(' · ')}</div></div>`:''}`;
+}
+function refreshLive(){
+  const c=cur(); if(!c)return; const t=totals(c);
+  document.querySelectorAll('[data-tot]').forEach(e=>e.textContent='₪ '+fmt(t.by[e.dataset.tot]));
+  document.querySelectorAll('[data-g="net"]').forEach(e=>e.textContent='₪ '+fmt(t.net));
+  document.querySelectorAll('[data-v]').forEach(e=>{const it=findItem(e.dataset.list,e.dataset.v); if(it)e.innerHTML=vcell(c,it);});
+}
+function findItem(list,id){const c=cur(); if(!c)return null; return (list==='pending'?c.pending:c.items).find(i=>i.id===id);}
+function renderJobs(){const j=$('#jobs'); if(j)j.innerHTML=jobsHtml(); renderSidebar();}
+
+/* ---------- הודעות והעתקה ---------- */
+let toastT;
+function toast(msg,undoFn){const t=$('#toast'); t.innerHTML=esc(msg)+(undoFn?' <button type="button" id="undo">בטל</button>':''); t.classList.add('on'); clearTimeout(toastT); toastT=setTimeout(()=>t.classList.remove('on'),undoFn?6000:2200); if(undoFn)$('#undo').onclick=()=>{undoFn();t.classList.remove('on');};}
+async function copyText(s,label){
+  try{await navigator.clipboard.writeText(s); toast(label||('הועתק: '+(s.length>40?s.slice(0,40)+'…':s)));}
+  catch(e){const ta=document.createElement('textarea'); ta.value=s; ta.style.position='fixed'; ta.style.opacity='0'; document.body.append(ta); ta.select(); let ok=false; try{ok=document.execCommand('copy');}catch(_){} ta.remove(); toast(ok?(label||'הועתק'):'הדפדפן חסם את ההעתקה. סמן את הערך והעתק ידנית');}
+}
+function allTsv(c){
+  const t=totals(c), out=[`הצהרת הון ליום ${dmy(c.date)}\t${c.name||''}\t${c.tz||''}`,''];
+  SECTIONS.forEach(s=>{const rows=summaryRows(c,s); if(!rows.length)return; out.push(`סעיף ${s.n}\t${s.t}`); out.push(s.cols.map(k=>lab(s,k)).join('\t')); rows.forEach(r=>out.push(r.join('\t'))); out.push(`סה"כ שורה ${s.code}\t${t.by[s.n]}`); out.push('');});
+  out.push(`סה"כ רכוש פרטי (200)\t${t.a}`,`סה"כ התחייבויות (210)\t${t.l}`,`רכוש פרטי נקי (220)\t${t.net}`);
+  return out.join('\n');
+}
+
+/* ---------- קבצים וחילוץ ---------- */
+function canvasBlob(cv){return new Promise(r=>cv.toBlob(b=>r(b),'image/jpeg',0.85));}
+async function prepare(file){
+  const name=file.name.toLowerCase();
+  if(file.type==='application/pdf'||name.endsWith('.pdf')){
+    if(!window.pdfjsLib)throw{msg:'רכיב קריאת ה-PDF לא נטען. רענן את הדף'};
+    pdfjsLib.GlobalWorkerOptions.workerSrc='https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.worker.min.js';
+    const pdf=await pdfjsLib.getDocument({data:new Uint8Array(await file.arrayBuffer()),isEvalSupported:false}).promise;
+    const n=pdf.numPages; let text=''; const images=[];
+    for(let p=1;p<=Math.min(n,60);p++){
+      const page=await pdf.getPage(p);
+      try{const tc=await page.getTextContent(); text+=`\n--- עמוד ${p} ---\n`+tc.items.map(i=>i.str).join(' ');}catch(_){}
+      if(p<=maxImg){const vp1=page.getViewport({scale:1}); const sc=Math.min(2.2,1600/vp1.width); const vp=page.getViewport({scale:sc}); const cv=document.createElement('canvas'); cv.width=Math.floor(vp.width); cv.height=Math.floor(vp.height); const ctx=cv.getContext('2d'); ctx.fillStyle='#fff'; ctx.fillRect(0,0,cv.width,cv.height); await page.render({canvasContext:ctx,viewport:vp}).promise; const b=await canvasBlob(cv); if(b)images.push(b);}
+    }
+    if(!images.length&&text.replace(/---.*?---|\s/g,'').length<40)throw{msg:'לא ניתן לקרוא את הקובץ (סרוק וללא אפשרות לשלוח תמונה)'};
+    return{images,text:text.slice(0,60000),pages:n};
+  }
+  if(file.type.startsWith('image/')){
+    if(!maxImg)throw{msg:'שליחת תמונות אינה זמינה בתצוגה הזו'};
+    if(imgTypes.includes(file.type))return{images:[file],text:'',pages:1};
+    const bmp=await createImageBitmap(file); const cv=document.createElement('canvas'); cv.width=bmp.width; cv.height=bmp.height; cv.getContext('2d').drawImage(bmp,0,0); return{images:[await canvasBlob(cv)],text:'',pages:1};
+  }
+  if(/\.(xlsx|xls|csv)$/.test(name)){
+    if(!window.XLSX)throw{msg:'רכיב קריאת האקסל לא נטען. רענן את הדף'};
+    const wb=XLSX.read(await file.arrayBuffer(),{type:'array'}); let text='';
+    wb.SheetNames.forEach(sn=>{text+=`\n--- גיליון ${sn} ---\n`+XLSX.utils.sheet_to_csv(wb.Sheets[sn]);});
+    return{images:[],text:text.slice(0,80000),pages:wb.SheetNames.length};
+  }
+  throw{msg:'סוג קובץ לא נתמך. אפשר PDF, תמונה או אקסל'};
+}
+function buildPrompt(c,fname,prep){
+  const secs=SECTIONS.map(s=>`${s.n}: ${s.t} — fields: ${colsOf(s).join(', ')}`).join('\n');
+  return `You extract data from Israeli financial documents for the Israeli Tax Authority capital declaration (הצהרת הון, form 1219, private assets and liabilities part).
+Client: ${c.name||'?'}${c.tz?' (ID '+c.tz+')':''}${c.spouse?', spouse: '+c.spouse+(c.spouseTz?' (ID '+c.spouseTz+')':''):''}. Declaration as-of date: ${c.date||'unknown'}.
+File name: ${fname}. ${prep.images.length?`Attached images show pages 1-${prep.images.length} of ${prep.pages}.`:'No images attached.'} ${prep.text?'Extracted text of the file follows; in PDF text layers Hebrew words may appear in reversed order, so trust the images when they disagree.':''}
+
+Form sections (number: title — allowed field keys):
+${secs}
+
+Rules:
+- One item per account / holding / loan / asset. A bank document with a current account, a deposit and a foreign-currency account gives separate items (one per account and currency). Bank deposits and savings plans in a bank go to section 3.
+- A securities portfolio (at a bank or a broker, Israeli or foreign) goes to section 7, one item per account with the account total. security_type like "תיק ניירות ערך", "מניות", "אג\\"ח", "קרנות נאמנות". amount_fx/amount_ils = cost basis (עלות) when shown; market_fx/market_ils = market value (שווי שוק). Fill what the document shows.
+- Pension funds, provident funds (קופת גמל, including קופת גמל להשקעה), study funds (קרן השתלמות), life-insurance savings, managers' insurance, חיסכון לכל ילד go to section 6; account_type is the product type in Hebrew.
+- Section 6 amount rule: for pension, provident (גמל) and study fund (השתלמות) documents, the ONLY relevant part is the tax-certificate table (the "אישור למס הכנסה" / "אישור שנתי לצורכי מס" section) and specifically its final total line (סה"כ). amount_ils = that final total, as printed. Ignore everything else in the document: balances, returns, management fees, insurance coverage, projections. If the document has no such tax-certificate table, leave amount_ils empty, set confidence "low" and say in note that the tax-certificate table was not found. Typical layout ("אישור מס להצהרת הון" / "אישור מס עבור קרן פנסיה"): a table with columns עובד / מעסיק / סה"כ and rows such as "הפקדה לקצבה מזכה", "הפקדה לקצבה מוכרת", and a last row "סה"כ:". Take the single number where the "סה"כ:" row meets the "סה"כ" column (the bottom-left corner number in a right-to-left table), e.g. 41,298.00 → amount_ils "41298". Do NOT add the employee and employer columns yourself, and do NOT add amounts from any other table: transfer tables (ניוד, נכנס/יוצא, ניוד מחברה אחרת) are ignored completely, even when they list money moved into this fund. The as_of_date is the date stated in the certificate sentence (e.g. "עד ליום 31.12.2025" → 2025-12-31). One item per fund/account in the certificate.
+- Loans and mortgages owed to a bank or financial institution go to section 13, amount = outstanding balance to repay (יתרה לסילוק) as of the declaration date. An overdrawn current account goes to section 13 as a positive amount with a note.
+- Vehicles go to section 9 with the purchase cost if shown (leave amount empty if only a license is shown, and say so in note). Real estate goes to 1 or 2 with cost incl. related costs; gush/helka/tat_helka from the contract or land registry.
+- Values are as of the declaration date. If the document has several dates, use the balance at the declaration date, or else the closest earlier date, and put that actual date in as_of_date (YYYY-MM-DD).
+- Numbers: plain digits with a dot for decimals, no commas or currency signs. Purchase dates as DD/MM/YYYY.
+- currency is an ISO code (ILS, USD, EUR...). For ILS amounts fill amount_ils only. For foreign currency fill amount_fx; fill amount_ils only if the document itself states the ILS equivalent.
+- bank_no is the Israeli bank code and branch_no the branch number, only when written in the document or certain from the bank name (לאומי 10, הפועלים 12, דיסקונט 11, מזרחי טפחות 20, הבינלאומי 31, מרכנתיל 17, ירושלים 54, יהב 4, אוצר החייל 14, מסד 46, דואר 9, וואן זירו 18).
+- country in Hebrew ("ישראל" for Israeli institutions). holder = account holder names as written. Text values in Hebrew; foreign institution names may stay as written.
+- Never invent values. Omit fields you cannot read and explain briefly in note (Hebrew). confidence: high / medium / low.
+- If the document is not relevant to assets or liabilities, return an empty items list and explain in document.summary.
+
+${learnPrompt()}
+Reply with only JSON in this shape:
+{"document":{"kind":"סוג המסמך בעברית","institution":"...","as_of_date":"YYYY-MM-DD","summary":"משפט קצר בעברית"},"items":[{"section":3,"fields":{"country":"ישראל","institution":"בנק לאומי","holder":"...","account_no":"...","bank_no":"10","branch_no":"...","currency":"ILS","amount_ils":"12345.67"},"as_of_date":"YYYY-MM-DD","confidence":"high","note":""}]}
+${prep.text?'\n=== FILE TEXT ===\n'+prep.text:''}`;
+}
+function errText(e){
+  const m={not_granted:'לא ניתן אישור לקריאת מסמכים. אשר את הבקשה כשהיא מופיעה',rate_limited:'יותר מדי בקשות כרגע. נסה שוב בעוד כמה דקות',invalid_json:'התשובה לא התקבלה בפורמט תקין. נסה להעלות שוב',image_rejected:'התמונה נדחתה (גודל או סוג). נסה קובץ אחר',prompt_too_large:'הקובץ גדול מדי. פצל אותו לכמה קבצים',session_expired:'יש להתחבר מחדש',refused:'המסמך לא עובד. נסה קובץ אחר',sampling_disabled:'קריאה אוטומטית אינה זמינה בחשבון הזה'};
+  return (e&&e.msg)||(e&&m[e.code])||'הקריאה נכשלה. נסה שוב';
+}
+async function processFiles(list){
+  const c=cur(); if(!c)return; const files=[...list]; if(!files.length)return;
+  if(!sample){toast('קריאה אוטומטית אינה זמינה בתצוגה הזו');return;}
+  const js=files.map(f=>({id:uidGen('j'),cid:c.id,name:f.name,status:'בתור',busy:true,f})); jobs=[...js,...jobs.filter(j=>j.busy||j.cid!==c.id),...jobs.filter(j=>!j.busy&&j.cid===c.id).slice(0,10)]; renderJobs();
+  for(const j of js){
+    try{
+      j.status='קורא את הקובץ…'; renderJobs();
+      const prep=await prepare(j.f);
+      j.status='מחלץ נתונים, זה יכול לקחת עד דקה…'; renderJobs();
+      const res=await sample.json(buildPrompt(c,j.f.name,prep),prep.images.length?{images:prep.images}:{});
+      const items=Array.isArray(res&&res.items)?res.items:[]; let n=0;
+      for(const x of items){
+        const s=SEC[parseInt(x&&x.section,10)]; if(!s)continue;
+        const f={}; const src=(x.fields&&typeof x.fields==='object')?x.fields:{};
+        colsOf(s).forEach(k=>{if(src[k]!=null&&String(src[k]).trim()!=='')f[k]=String(src[k]).trim();});
+        if(f.currency)f.currency=f.currency.toUpperCase();
+        if(s.cols.includes('currency')&&!f.currency)f.currency='ILS';
+        const it={id:uidGen('i'),s:s.n,f,inc:true,src:j.f.name,note:String(x.note||''),asof:/^\d{4}-\d{2}-\d{2}$/.test(x.as_of_date||'')?x.as_of_date:((res.document&&/^\d{4}-\d{2}-\d{2}$/.test(res.document.as_of_date||''))?res.document.as_of_date:''),conf:x.confidence||''};
+        if(s.n===6)it.dep6=true;
+        it.auto=!(f.amount_ils&&f.currency&&f.currency!=='ILS'); it.mauto=!(f.market_ils&&f.currency&&f.currency!=='ILS');
+        const dd=res.document||{}; it.inst=String(dd.institution||''); it.kind=String(dd.kind||'');
+        it.orig={s:it.s,f:Object.assign({},f)};
+        c.pending.push(it); n++;
+      }
+      const d=res&&res.document||{};
+      c.files.push({name:j.f.name,at:Date.now(),n,kind:String(d.kind||''),inst:String(d.institution||''),asof:/^\d{4}-\d{2}-\d{2}$/.test(d.as_of_date||'')?d.as_of_date:'',summary:String(d.summary||'')});
+      j.busy=false; j.status=n?`נמצאו ${n} פריטים לאישור`:(d.summary?String(d.summary):'לא נמצאו נתונים רלוונטיים');
+      touch(c); if(curId===c.id&&tab==='docs')render(); else renderSidebar();
+    }catch(e){
+      j.busy=false; j.err=true; j.status=errText(e); renderJobs();
+      if(e&&(e.code==='not_granted'||e.code==='sampling_disabled')){js.forEach(o=>{if(o.busy){o.busy=false;o.err=true;o.status='בוטל';}}); renderJobs(); break;}
+    }
+    delete j.f;
+  }
+}
+
+/* ---------- פעולות ---------- */
+function newClient(data){
+  const c=normalize(Object.assign({id:uidGen('c'),name:'לקוח חדש',tz:'',spouse:'',date:`${new Date().getFullYear()-1}-12-31`,basis:'cost',rates:{},items:[],pending:[],files:[],createdAt:Date.now(),updatedAt:Date.now()},data||{}));
+  clients.set(c.id,c); curId=c.id; saveSoon(c.id); return c;
+}
+function demo(){
+  const mk=(s,f,extra)=>Object.assign({id:uidGen('i'),s,f,inc:true,src:'דוגמה',note:'',asof:'2025-12-31',conf:'high',auto:true,mauto:true},extra||{});
+  newClient({name:'דוגמה – ישראל ישראלי',tz:'000000018',spouse:'שרה ישראלי',date:'2025-12-31',rates:{USD:'3.65',EUR:'3.80'},
+    items:[
+      mk(1,{asset_type:'דירת מגורים',date:'15/03/2018',gush:'30123',helka:'45',tat_helka:'12',address:'רחוב הדוגמה 5, ירושלים',amount_ils:'1850000'},{asof:''}),
+      mk(3,{country:'ישראל',institution:'בנק לאומי',holder:'ישראל ושרה ישראלי',account_no:'123456',bank_no:'10',branch_no:'902',currency:'ILS',amount_ils:'48250'}),
+      mk(3,{country:'ישראל',institution:'בנק הפועלים',holder:'ישראל ישראלי',account_no:'654321',bank_no:'12',branch_no:'600',currency:'USD',amount_fx:'12000'}),
+      mk(6,{account_type:'קופת גמל להשקעה',country:'ישראל',institution:'אלטשולר שחם',holder:'ישראל ישראלי',currency:'ILS',amount_ils:'86400'}),
+      mk(7,{security_type:'תיק ניירות ערך',country:'ארה"ב',institution:'Interactive Brokers',holder:'ישראל ישראלי',account_no:'U1234567',currency:'USD',amount_fx:'35000',market_fx:'41200'}),
+      mk(9,{vehicle_type:'רכב פרטי',date:'01/06/2021',plate:'12-345-67',amount_ils:'145000'},{asof:''}),
+      mk(13,{country:'ישראל',institution:'מזרחי טפחות',holder:'ישראל ושרה ישראלי',account_no:'778899',bank_no:'20',branch_no:'468',currency:'ILS',amount_ils:'612000'})
+    ],
+    pending:[mk(3,{country:'ישראל',institution:'בנק דיסקונט',holder:'שרה ישראלי',account_no:'334455',bank_no:'11',branch_no:'070',currency:'ILS',amount_ils:'9870'},{asof:'2025-12-28',conf:'medium',note:'האישור מציג יתרה ליום 28/12/2025'})]
+  });
+  tab='summary'; render();
+}
+document.addEventListener('click',e=>{
+  const b=e.target.closest('[data-act]'); if(!b)return; const a=b.dataset.act, c=cur();
+  if(a!=='delclient'&&armed){armed=null;}
+  switch(a){
+    case 'newc': view='pick'; pickQ=''; pickHi=0; pickOpen=true; render(); break;
+    case 'newblank': view='client'; newClient(); showDetails=true; tab='docs'; render(); setTimeout(()=>{const n=$('#c-name'); if(n){n.focus();n.select();}},0); break;
+    case 'pickc': { const r=((roster&&roster.clients)||[]).find(x=>x.tz===b.dataset.tz&&x.name===b.dataset.name)||{}; view='client'; newClient({name:r.name||b.dataset.name,tz:r.tz||'',spouse:spName(r),spouseTz:r.spouseTz||'',refTz:r.tz||''}); showDetails=true; tab='docs'; render(); break; }
+    case 'sync': doSync(); break;
+    case 'demo': demo(); break;
+    case 'pick': if(curId===b.dataset.id&&view==='client'){showDetails=!showDetails;} else {curId=b.dataset.id; showDetails=false; view='client';} render(); break;
+    case 'tab': tab=b.dataset.tab; render(); break;
+    case 'details': showDetails=!showDetails; render(); break;
+    case 'delclient': if(armed===c.id){armed=null; removeClient(c.id); toast('התיק נמחק');} else {armed=c.id; render();} break;
+    case 'browse': $('#fileinput').click(); break;
+    case 'approve': { const i=c.pending.findIndex(x=>x.id===b.dataset.id); if(i>-1){const it=c.pending.splice(i,1)[0]; const learned=recordLesson(it); delete it.orig; c.items.push(it); touch(c); if(learned)touchLearn(); render(); if(learned)toast('אושר. התיקון נשמר ללמידה');} break; }
+    case 'approveAll': { let k=0; c.pending.forEach(it=>{if(recordLesson(it))k++; delete it.orig;}); c.items.push(...c.pending); const n=c.pending.length; c.pending=[]; touch(c); if(k)touchLearn(); render(); toast(`${n} פריטים אושרו${k?`, ${k} תיקונים נשמרו ללמידה`:''}`); break; }
+    case 'ok6': { const it=c.items.find(x=>x.id===b.dataset.id); if(it){it.dep6=true; touch(c); render();} break; }
+    case 'rules': view='rules'; render(); break;
+    case 'back': view='client'; render(); break;
+    case 'addrule': { const el=$('#newrule'); const v=el.value.trim(); if(!v){el.focus();break;} learn.rules.push({id:uidGen('r'),text:v,at:Date.now()}); touchLearn(); render(); setTimeout(()=>{const n=$('#newrule'); if(n)n.focus();},0); break; }
+    case 'delrule': { const i=learn.rules.findIndex(r=>r.id===b.dataset.id); if(i<0)break; const [r]=learn.rules.splice(i,1); touchLearn(); render(); toast('הכלל נמחק',()=>{learn.rules.splice(i,0,r); touchLearn(); render();}); break; }
+    case 'dellesson': { const i=learn.lessons.findIndex(r=>r.id===b.dataset.id); if(i<0)break; const [r]=learn.lessons.splice(i,1); touchLearn(); render(); toast('התיקון נמחק',()=>{learn.lessons.splice(i,0,r); touchLearn(); render();}); break; }
+    case 'delp': case 'del': {
+      const arr=a==='delp'?c.pending:c.items, i=arr.findIndex(x=>x.id===b.dataset.id); if(i<0)break;
+      const [it]=arr.splice(i,1); touch(c); render();
+      toast('השורה נמחקה',()=>{arr.splice(i,0,it); touch(c); render();}); break; }
+    case 'add': { const s=SEC[+b.dataset.s]; const f={}; if(s.cols.includes('currency'))f.currency='ILS'; if(s.cols.includes('country'))f.country='ישראל';
+      const it={id:uidGen('i'),s:s.n,f,inc:true,src:'ידני',note:'',asof:'',conf:'',auto:true,mauto:true}; c.items.push(it); touch(c); render();
+      setTimeout(()=>{const el=document.getElementById(`f-${it.id}-${s.cols[0]}`); if(el)el.focus();},0); break; }
+    case 'copy': copyText(b.dataset.copy); break;
+    case 'copyrow': copyText(b.dataset.copy,'השורה הועתקה'); break;
+    case 'copyall': copyText(allTsv(c),'הסיכום המלא הועתק. אפשר להדביק באקסל'); break;
+  }
+});
+function maskDate(t,e){
+  const del=e.inputType&&e.inputType.startsWith('delete');
+  const d=t.value.replace(/\D/g,'').slice(0,8);
+  let out=d.slice(0,2); if(d.length>2)out+='/'+d.slice(2,4); if(d.length>4)out+='/'+d.slice(4);
+  if(!del&&(d.length===2||d.length===4))out+='/';
+  if(t.value!==out)t.value=out;
+}
+document.addEventListener('input',e=>{
+  const t=e.target, c=cur();
+  if(t.dataset&&(t.dataset.cdate||t.dataset.k==='date'))maskDate(t,e);
+  if(t.id==='q'){q=t.value.trim(); renderSidebar(); return;}
+  if(t.id==='pickq'){pickQ=t.value; pickHi=0; pickOpen=true; refreshPick(); return;}
+  if(t.dataset.lnote){const l=learn.lessons.find(x=>x.id===t.dataset.lnote); if(l){l.note=t.value; touchLearn();} return;}
+  if(!c)return;
+  if(t.dataset.k){
+    const it=findItem(t.dataset.list,t.dataset.id); if(!it)return; const k=t.dataset.k; let v=t.value; if(k==='currency')v=v.toUpperCase();
+    it.f[k]=v; if(k==='amount_ils')it.auto=v.trim()===''; if(k==='market_ils')it.mauto=v.trim()==='';
+    touch(c); refreshLive();
+  } else if(t.dataset.c){
+    c[t.dataset.c]=t.value; touch(c);
+    if(t.dataset.c==='name'){const h=document.querySelector('.namebtn'); if(h)h.firstChild.textContent=t.value||'ללא שם'; renderSidebar();}
+    if(t.dataset.c==='basis')render();
+    if(t.dataset.c==='date'){const b=document.querySelector('.head .sub b'); if(b)b.textContent=dmy(t.value)||'—'; renderSidebar();}
+  } else if(t.dataset.cdate){
+    const v=t.value.trim(); let m=/^(\d{1,2})[\/.\-](\d{1,2})[\/.\-](\d{4})$/.exec(v)||/^(\d{2})(\d{2})(\d{4})$/.exec(v);
+    let iso=null; if(m){const d=+m[1],mo=+m[2],y=+m[3]; const dt=new Date(Date.UTC(y,mo-1,d)); if(y>=1950&&y<=2100&&dt.getUTCMonth()===mo-1&&dt.getUTCDate()===d)iso=`${y}-${String(mo).padStart(2,'0')}-${String(d).padStart(2,'0')}`;}
+    t.classList.toggle('bad',!!v&&!iso);
+    if(iso&&iso!==c.date){c.date=iso; touch(c); const b=document.querySelector('.head .sub b'); if(b)b.textContent=dmy(iso); renderSidebar();}
+  } else if(t.dataset.rate){ c.rates[t.dataset.rate]=t.value; touch(c); refreshLive(); }
+});
+document.addEventListener('change',e=>{
+  const t=e.target, c=cur(); if(!c)return;
+  if(t.id==='fileinput'){processFiles(t.files); t.value=''; return;}
+  if(t.dataset.act==='psec'){const it=findItem('pending',t.dataset.id); if(it){it.s=+t.value; const s=SEC[it.s]; if(s.cols.includes('currency')&&!it.f.currency)it.f.currency='ILS'; touch(c); render();}}
+  if(t.dataset.act==='inc'){const it=findItem('items',t.dataset.id); if(it){it.inc=t.checked; touch(c); refreshLive();}}
+  if(t.dataset.k==='currency'){ if(showDetails)render(); else refreshLive(); }
+});
+document.addEventListener('focusin',e=>{if(e.target.id==='pickq'){pickOpen=true;refreshPick();}});
+document.addEventListener('mousedown',e=>{const o=e.target.closest&&e.target.closest('.ddi'); if(o)e.preventDefault();});
+document.addEventListener('focusout',e=>{if(e.target.id==='pickq'){pickOpen=false;setTimeout(refreshPick,0);}});
+document.addEventListener('keydown',e=>{
+  if(e.target.id!=='pickq')return; const f=pickMatches(), n=Math.min(f.length,50);
+  if(e.key==='ArrowDown'){e.preventDefault();pickOpen=true;pickHi=Math.min(pickHi+1,n-1);refreshPick();}
+  else if(e.key==='ArrowUp'){e.preventDefault();pickHi=Math.max(pickHi-1,0);refreshPick();}
+  else if(e.key==='Escape'){pickOpen=false;refreshPick();}
+  else if(e.key==='Enter'){e.preventDefault();const o=document.querySelector('.ddi.hi'); if(o)o.click();}
+});
+document.addEventListener('dragover',e=>{const d=e.target.closest&&e.target.closest('#drop'); if(d){e.preventDefault(); d.classList.add('over');}});
+document.addEventListener('dragleave',e=>{const d=e.target.closest&&e.target.closest('#drop'); if(d)d.classList.remove('over');});
+document.addEventListener('drop',e=>{const d=e.target.closest&&e.target.closest('#drop'); if(d){e.preventDefault(); d.classList.remove('over'); processFiles(e.dataTransfer.files);} else e.preventDefault();});
+
+/* ---------- אתחול ---------- */
+render(); setSave('טוען…');
+(async()=>{
+  const use=n=>window.claude&&window.claude.use?window.claude.use(n).catch(()=>null):Promise.resolve(null);
+  const [d,u,s]=await Promise.all([use('db'),use('user'),use('sample')]);
+  use('mcp').then(m=>{mcp=m||null; renderSync();});
+  sample=s||null;
+  if(sample){try{const lim=await sample.limits(); if(lim&&lim.images){maxImg=Math.min(lim.images.maxCount||0,10); imgTypes=lim.images.mediaTypes||imgTypes;}}catch(_){}}
+  let uid=null; if(u){try{uid=await u.id();}catch(_){}}
+  if(d&&uid){
+    db=d; col=db.collection('data/users/'+uid); storeMode='db';
+    try{ db.doc('roster/list').onSnapshot(sn=>{roster=sn.exists?sn.data():null; onRoster();},()=>{}); }catch(_){}
+    col.onSnapshot(snap=>{
+      let changed=!loaded;
+      snap.docChanges().forEach(ch=>{
+        const id=ch.doc.id; if(dirty.has(id)||writing.has(id))return;
+        if(id===LEARN_ID){ if(ch.type!=='removed'){const d=ch.doc.data(); if((d.updatedAt||0)>(learn.updatedAt||0)){learn=normLearn(JSON.parse(JSON.stringify(d))); changed=true;}} return; }
+        if(ch.type==='removed'){if(clients.delete(id))changed=true; return;}
+        const data=ch.doc.data(), local=clients.get(id);
+        if(local&&(local.updatedAt||0)>=(data.updatedAt||0))return;
+        clients.set(id,normalize(JSON.parse(JSON.stringify(data)))); changed=true;
+      });
+      if(!loaded){loaded=true; setSave(clients.size?'כל השינויים נשמרו':'השמירה פעילה');}
+      if(changed){pickDefault(); const ae=document.activeElement; if(ae&&ae.closest&&ae.closest('#main')&&ae.matches('input'))renderSidebar(); else render();}
+    },err=>{setSave('החיבור לשמירה נותק. רענן את הדף');});
+  } else {
+    loadLocal(); pickDefault(); render();
+    setSave(storeMode==='local'?'השמירה הקבועה אינה זמינה. הנתונים נשמרים בדפדפן הזה בלבד':'השמירה אינה זמינה. הנתונים יימחקו ברענון');
+  }
+  if(!sample&&cur()&&tab==='docs')render();
+})();
+</script>
+</body>
+</html>
